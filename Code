@@ -1,0 +1,107 @@
+import yfinance as yf
+import MetaTrader5 as mt5
+from datetime import datetime, timedelta
+import time
+
+# Initialize MT5 connection
+def initialize_mt5():
+    if not mt5.initialize():
+        print("MT5 initialization failed.")
+        print(mt5.last_error())
+        quit()
+    else:
+        print("Connected to MetaTrader 5.")
+
+# Define the End-of-Day Reversal Strategy
+def end_of_day_reversal(symbol, mt5_symbol):
+    # Fetch data until 23:30 (day data)
+    now = datetime.now()
+    day_end = now.replace(hour=23, minute=30, second=0, microsecond=0)
+    if now < day_end:
+        print("Current time is before 23:30. Please run this after 23:30.")
+        return
+
+    print(f"Fetching day data for {symbol} until 23:30...")
+    data_day = yf.download(tickers=symbol, period="1d", interval="1m", end=day_end)
+    if data_day.empty:
+        print(f"Failed to fetch day data for {symbol}.")
+        return
+
+    # Fetch live data after 23:30
+    print(f"Fetching live data for {symbol} after 23:30...")
+    data_live = yf.download(tickers=symbol, period="1d", interval="1m", start=day_end)
+    if data_live.empty:
+        print(f"Failed to fetch live data for {symbol}.")
+        return
+
+    # Calculate day data high, low, and close
+    day_high = data_day["High"].max()
+    day_low = data_day["Low"].min()
+
+    # Get the latest close from live data
+    live_close = data_live.iloc[-1]["Close"]
+
+    # Reversal logic: compare live close to day high/low
+    action = None
+    if live_close < day_low + (0.05 * (day_high - day_low)):
+        action = "BUY"
+    elif live_close > day_high - (0.05 * (day_high - day_low)):
+        action = "SELL"
+
+    # Print the results
+    print(f"\n--- {symbol} Reversal Check ---")
+    print(f"Day High (until 23:30): {day_high}, Day Low: {day_low}")
+    print(f"Live Close: {live_close}")
+    if action:
+        print(f"Action: {action}")
+        place_trade(mt5_symbol, action)
+    else:
+        print("No reversal signal detected.")
+
+# Place a trade on MT5
+def place_trade(symbol, action):
+    # Define order parameters
+    lot_size = 0.1
+    order_type = mt5.ORDER_TYPE_BUY if action == "BUY" else mt5.ORDER_TYPE_SELL
+
+    # Create order request
+    request = {
+        "action": mt5.TRADE_ACTION_DEAL,
+        "symbol": symbol,
+        "volume": lot_size,
+        "type": order_type,
+        "price": mt5.symbol_info_tick(symbol).ask if action == "BUY" else mt5.symbol_info_tick(symbol).bid,
+        "deviation": 10,
+        "magic": 123456,
+        "comment": "End-of-Day Reversal",
+        "type_time": mt5.ORDER_TIME_GTC,
+        "type_filling": mt5.ORDER_FILLING_IOC,
+    }
+
+    # Send order
+    result = mt5.order_send(request)
+    if result.retcode != mt5.TRADE_RETCODE_DONE:
+        print(f"Trade failed: {result.retcode}")
+    else:
+        print(f"Trade successful! {action} order placed for {symbol}.")
+
+# Main function
+if __name__ == "__main__":
+    # Initialize MT5
+    initialize_mt5()
+
+    # Yahoo Finance and MT5 symbols
+    yahoo_symbol = "AAPL"  # Replace with your Yahoo Finance symbol
+    mt5_symbol = "AAPL"    # Replace with your MetaTrader 5 symbol
+
+    # Wait for 23:30 to check reversal
+    print(f"Waiting for 23:30 to check reversal for {yahoo_symbol}...")
+    while True:
+        now = datetime.now()
+        if now.hour == 23 and now.minute >= 30:
+            end_of_day_reversal(yahoo_symbol, mt5_symbol)
+            break
+        time.sleep(1)
+
+    # Shutdown MT5 connection
+    mt5.shutdown()
