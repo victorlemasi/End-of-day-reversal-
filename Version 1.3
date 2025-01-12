@@ -1,0 +1,48 @@
+# Define the End-of-Day Reversal Strategy
+def end_of_day_reversal(symbol, mt5_symbol):
+    # Fetch data until 23:30 (day data)
+    now = datetime.now()
+    day_end = now.replace(hour=23, minute=30, second=0, microsecond=0)
+    if now < day_end:
+        print("Current time is before 23:30. Please run this after 23:30.")
+        return
+
+    print(f"Fetching day data for {symbol} until 23:30...")
+    data_day = yf.download(tickers=symbol, period="1d", interval="1m", end=day_end)
+    if data_day.empty:
+        print(f"Failed to fetch day data for {symbol}.")
+        return
+
+    # Fetch live data after 23:30
+    print(f"Fetching live data for {symbol} after 23:30...")
+    data_live = yf.download(tickers=symbol, period="1d", interval="1m", start=day_end)
+    if data_live.empty:
+        print(f"Failed to fetch live data for {symbol}.")
+        return
+
+    # Calculate day data high, low, and close
+    day_high = data_day["High"].max()
+    day_low = data_day["Low"].min()
+
+    # Get the latest close from live data
+    live_close = data_live.iloc[-1]["Close"]
+
+    # Reversal Logic:
+    # SELL when live close is near the day's low (buyers are out)
+    # BUY when live close is near the day's high
+    action = None
+    if live_close < day_low + (0.05 * (day_high - day_low)):
+        action = "SELL"
+    elif live_close > day_high - (0.05 * (day_high - day_low)):
+        action = "BUY"
+
+    # Print the results
+    print(f"\n--- {symbol} Reversal Check ---")
+    print(f"Day High (until 23:30): {day_high}, Day Low: {day_low}")
+    print(f"Live Close: {live_close}")
+    if action:
+        print(f"Action: {action}")
+        place_trade(mt5_symbol, action)
+    else:
+        print("No reversal signal detected.")
+        
