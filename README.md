@@ -7,4 +7,4 @@ Live Close: 176.0
 Action: SELL
 Trade successful! SELL order placed for AAPL.
 
-logic the buyers or the sellers have already placed their bets of the day or the daytraders are out with their profity
+logic the buyers or the sellers have already placed their bets of the day or the daytraders are out with their profits 
